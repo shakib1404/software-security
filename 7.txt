@@ -1,0 +1,97 @@
+create csptest.html in you working directory
+
+nano csptest.html
+
+paste the following html
+
+<html>
+<h2>CSP Test</h2>
+
+<p>1. Inline: Correct Nonce: <span id='area1'>Failed</span></p>
+<p>2. Inline: Wrong Nonce: <span id='area2'>Failed</span></p>
+<p>3. Inline: No Nonce: <span id='area3'>Failed</span></p>
+<p>4. From self: <span id='area4'>Failed</span></p>
+<p>5. From example68.com: <span id='area5'>Failed</span></p>
+<p>6. From example79.com: <span id='area6'>Failed</span></p>
+
+<script type="text/javascript" nonce="1rA2345">
+document.getElementById('area1').innerHTML = "OK";
+</script>
+
+<script type="text/javascript" nonce="2rB3333">
+document.getElementById('area2').innerHTML = "OK";
+</script>
+
+<script type="text/javascript">
+document.getElementById('area3').innerHTML = "OK";
+</script>
+
+<script src="script1.js"></script>
+<script src="http://www.example68.com:8000/script2.js"></script>
+<script src="http://www.example79.com:8000/script3.js"></script>
+
+<button onclick="alert('hello')">Click me</button>
+</html>
+
+
+create 3 files in same directory....
+
+script1.js
+document.getElementById('area4').innerHTML = "OK";
+
+script2.js
+
+document.getElementById('area5').innerHTML = "OK";
+
+script3.js
+
+document.getElementById('area6').innerHTML = "OK";
+
+
+
+create http_server.py
+
+nano http_server.py
+
+
+paste
+#!/usr/bin/env python3
+from http.server import HTTPServer, BaseHTTPRequestHandler
+from urllib.parse import urlparse
+
+class MyHTTPRequestHandler(BaseHTTPRequestHandler):
+    def do_GET(self):
+        o = urlparse(self.path)
+        try:
+            f = open("." + o.path, 'rb')
+            self.send_response(200)
+            self.send_header('Content-Security-Policy',
+                "default-src 'self'; script-src 'self' *.example68.com:8000 'nonce-1rA2345'")
+            self.send_header('Content-type', 'text/html')
+            self.end_headers()
+            self.wfile.write(f.read())
+            f.close()
+        except FileNotFoundError:
+            self.send_error(404, "File not found")
+
+httpd = HTTPServer(('127.0.0.1', 8000), MyHTTPRequestHandler)
+print("Serving at http://127.0.0.1:8000")
+httpd.serve_forever()
+
+make it executable
+chmod +x http_server.py
+./http_server.py
+
+edit host file in different terminal
+sudo nano /etc/hosts
+
+add
+127.0.0.1 www.example32.com
+127.0.0.1 www.example68.com
+127.0.0.1 www.example79.com
+
+
+browse....
+http://www.example32.com:8000/csptest.html
+
+
