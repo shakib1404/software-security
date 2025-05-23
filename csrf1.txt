@@ -49,6 +49,33 @@
 4th.....
 sudo nano /var/www/CSRF/Elgg/vendor/elgg/elgg/engine/classes/Elgg/ActionsService.php
 
+public function gatekeeper($action) {
+		//return true;
+
+		if ($action === 'login') {
+			if ($this->validateActionToken(false)) {
+				return true;
+			}
+
+			$token = get_input('__elgg_token');
+			$ts = (int)get_input('__elgg_ts');
+			if ($token && $this->validateTokenTimestamp($ts)) {
+				// The tokens are present and the time looks valid: this is probably a mismatch due to the 
+				// login form being on a different domain.
+				register_error(_elgg_services()->translator->translate('actiongatekeeper:crosssitelogin'));
+
+				forward('login', 'csrf');
+			}
+
+			// let the validator send an appropriate msg
+			$this->validateActionToken();
+
+		} else if ($this->validateActionToken()) {
+			return true;
+		}
+
+		forward(REFERER, 'csrf');
+	}
 
 
 Comment out return true; like this:

